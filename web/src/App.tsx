@@ -44,6 +44,9 @@ export function App() {
   const [buscando, setBuscando] = useState(false);
   const [erroBusca, setErroBusca] = useState<string>("");
   const [modoManual, setModoManual] = useState(false);
+  const [expandido, setExpandido] = useState<Set<string>>(new Set());
+  const [detalhes, setDetalhes] = useState<Record<string, string>>({});
+  const [carregandoDet, setCarregandoDet] = useState<Set<string>>(new Set());
 
   // Passo 3
   const [jobText, setJobText] = useState<string>(exemploVaga);
@@ -131,6 +134,30 @@ export function App() {
     if (passo === 2 && site === "exemplo" && vagas === null && !buscando) void buscarVagas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [passo, site]);
+
+  async function verRequisitos(r: VagaRankeada) {
+    const link = r.vaga.link;
+    setExpandido((s) => toggle(s, link));
+    if (detalhes[link] !== undefined) return; // ja carregado
+    setCarregandoDet((s) => new Set(s).add(link));
+    try {
+      const resp = await fetch("/api/detalhar", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ site, link }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as { descricao?: string };
+      setDetalhes((d) => ({ ...d, [link]: data.descricao?.trim() || r.vaga.snippet || "Sem descrição disponível." }));
+    } catch {
+      setDetalhes((d) => ({ ...d, [link]: "Não consegui carregar os requisitos agora." }));
+    } finally {
+      setCarregandoDet((s) => {
+        const n = new Set(s);
+        n.delete(link);
+        return n;
+      });
+    }
+  }
 
   async function escolherVaga(r: VagaRankeada) {
     setVagaEscolhida(`${r.vaga.titulo} — ${r.vaga.empresa}`);
@@ -310,23 +337,44 @@ export function App() {
 
             {vagas && vagas.length > 0 && (
               <ul className="vagas">
-                {vagas.map((r) => (
-                  <li key={r.vaga.link} className="vaga-item">
-                    <div className={`vaga-score n-${r.score >= 75 ? "alto" : r.score >= 50 ? "medio" : "baixo"}`}>{r.score}%</div>
-                    <div className="vaga-info">
-                      <strong>{r.vaga.titulo}</strong>
-                      <span className="vaga-meta">
-                        {r.vaga.empresa} · {r.vaga.local} · {candLabel(r.vaga.candidatos)}
-                      </span>
-                      <span className="vaga-match">
-                        {r.matched.length ? `bate: ${r.matched.join(", ")}` : "sem palavras-chave em comum"}
-                      </span>
-                    </div>
-                    <button className="btn primario" onClick={() => escolherVaga(r)}>
-                      Adaptar
-                    </button>
-                  </li>
-                ))}
+                {vagas.map((r) => {
+                  const link = r.vaga.link;
+                  const aberto = expandido.has(link);
+                  const ehUrl = /^https?:\/\//.test(link);
+                  return (
+                    <li key={link} className="vaga-item">
+                      <div className="vaga-linha">
+                        <div className={`vaga-score n-${r.score >= 75 ? "alto" : r.score >= 50 ? "medio" : "baixo"}`}>{r.score}%</div>
+                        <div className="vaga-info">
+                          <strong>{r.vaga.titulo}</strong>
+                          <span className="vaga-meta">
+                            {r.vaga.empresa} · {r.vaga.local} · {candLabel(r.vaga.candidatos)}
+                          </span>
+                          <span className="vaga-match">
+                            {r.matched.length ? `bate: ${r.matched.join(", ")}` : "sem palavras-chave em comum"}
+                          </span>
+                          <div className="vaga-acoes">
+                            <span className="badge-site">{nomeSite}</span>
+                            {ehUrl && (
+                              <a className="link-vaga" href={link} target="_blank" rel="noreferrer">
+                                abrir no site ↗
+                              </a>
+                            )}
+                            <button className="link-req" onClick={() => verRequisitos(r)}>
+                              {aberto ? "Ocultar requisitos" : "Ver requisitos"}
+                            </button>
+                          </div>
+                        </div>
+                        <button className="btn primario" onClick={() => escolherVaga(r)}>
+                          Adaptar
+                        </button>
+                      </div>
+                      {aberto && (
+                        <div className="vaga-req">{carregandoDet.has(link) ? "Carregando requisitos…" : detalhes[link]}</div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
