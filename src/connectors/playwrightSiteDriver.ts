@@ -1,3 +1,5 @@
+import { rmSync } from "node:fs";
+import { join } from "node:path";
 import { chromium, type BrowserContext } from "playwright";
 import type { Criterios } from "./types.js";
 import type { RawCard, SiteDriver } from "./browserConnector.js";
@@ -32,25 +34,64 @@ function dedup(cards: RawCard[]): RawCard[] {
 
 export class PlaywrightSiteDriver implements SiteDriver {
   private ctx: BrowserContext | null = null;
+  private abrindo: Promise<BrowserContext> | null = null;
 
   constructor(
     private readonly config: SiteConfig,
     private readonly opts: PlaywrightSiteDriverOptions,
   ) {}
 
+  /**
+   * Remove os locks de perfil que sobram quando um Chromium anterior nao fechou
+   * direito — a causa do erro "Target page, context or browser has been closed"
+   * (o novo processo detecta o lock e sai na hora, sem abrir a janela).
+   */
+  private limparLock(): void {
+    for (const f of ["SingletonLock", "SingletonCookie", "SingletonSocket", "lockfile"]) {
+      try {
+        rmSync(join(this.opts.userDataDir, f), { force: true, recursive: true });
+      } catch {
+        /* ok */
+      }
+    }
+  }
+
+  private async getContexto(): Promise<BrowserContext> {
+    if (this.ctx) return this.ctx;
+    // Um unico launch em voo (evita duas requisicoes lancarem o mesmo perfil juntas).
+    if (!this.abrindo) {
+      this.abrindo = (async () => {
+        this.limparLock();
+        const ctx = await chromium.launchPersistentContext(this.opts.userDataDir, {
+          headless: this.opts.headless ?? false,
+          viewport: { width: 1280, height: 900 },
+        });
+        // Shim para o helper `__name` que o tsx/esbuild injeta nas funcoes: sem ele,
+        // os callbacks de $$eval (serializados para o navegador) quebram com
+        // "ReferenceError: __name is not defined" e a captura retorna vazio.
+        await ctx.addInitScript("window.__name = window.__name || function (f) { return f; };");
+        ctx.on("close", () => {
+          if (this.ctx === ctx) this.ctx = null;
+        });
+        this.ctx = ctx;
+        return ctx;
+      })().finally(() => {
+        this.abrindo = null;
+      });
+    }
+    return this.abrindo;
+  }
+
   private async page() {
-    // Resiliente: se o contexto foi fechado (usuario fechou a janela, etc.), relanca.
+    // Resiliente: se o contexto foi fechado (janela fechada, lock antigo), relanca.
     for (let tentativa = 0; tentativa < 2; tentativa++) {
       try {
-        if (!this.ctx) {
-          this.ctx = await chromium.launchPersistentContext(this.opts.userDataDir, {
-            headless: this.opts.headless ?? false,
-            viewport: { width: 1280, height: 900 },
-          });
-        }
-        return this.ctx.pages()[0] ?? (await this.ctx.newPage());
+        const ctx = await this.getContexto();
+        return ctx.pages()[0] ?? (await ctx.newPage());
       } catch (e) {
         this.ctx = null;
+        this.abrindo = null;
+        this.limparLock();
         if (tentativa === 1) throw e;
       }
     }
@@ -64,6 +105,7 @@ export class PlaywrightSiteDriver implements SiteDriver {
       /* ja fechado */
     }
     this.ctx = null;
+    this.abrindo = null;
   }
 
   /** True se, ao abrir a home, o site NAO redirecionou para login/authwall. */
@@ -96,8 +138,9 @@ export class PlaywrightSiteDriver implements SiteDriver {
     const page = await this.page();
     await page.goto(this.config.searchUrl(criterios), { waitUntil: "domcontentloaded" });
     const s = this.config.seletores;
-    // Espera aparecer algo (card ou link de vaga) antes de raspar; rola para carregar a lista.
-    await page.waitForSelector(`${s.card}, ${s.link}`, { timeout: 15000 }).catch(() => {});
+    // Sites de vaga sao SPAs: espera a rede assentar e aparecer algo antes de raspar.
+    await page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
+    await page.waitForSelector(`${s.card}, ${s.link}, a[href*='/vaga'], a[href*='/job']`, { timeout: 15000 }).catch(() => {});
     await this.autoScroll();
 
     // Estrategia 1: cards estruturados pelos seletores da config.
@@ -153,7 +196,38 @@ export class PlaywrightSiteDriver implements SiteDriver {
       )
       .catch(() => [] as RawCard[]);
 
-    return dedup(porLinks);
+    if (porLinks.length) return dedup(porLinks);
+
+    // Estrategia 3 (universal): garimpa qualquer ancora cujo href pareca uma vaga.
+    // Independe dos seletores do site — util quando o layout muda.
+    const universal = await page
+      .$$eval("a[href]", (anchors) => {
+        const rx = /\/(vagas?|jobs?|job|emprego|empregos|oportunidade|carreiras?|posting)\//i;
+        const txt = (el: Element | null | undefined) => (el?.textContent ?? "").trim();
+        return (anchors as HTMLAnchorElement[])
+          .filter((a) => rx.test(a.href))
+          .map((a) => {
+            const card = a.closest("li, article, [class*='card'], [class*='result'], [class*='job'], [class*='vaga']") ?? a.parentElement;
+            const acha = (pistas: string[]) => {
+              for (const p of pistas) {
+                const t = txt(card?.querySelector(`[class*='${p}']`));
+                if (t) return t;
+              }
+              return "";
+            };
+            return {
+              titulo: (a.getAttribute("aria-label") || a.textContent || "").trim(),
+              empresa: acha(["subtitle", "company", "empresa", "employer"]),
+              local: acha(["caption", "location", "local", "metadata"]),
+              link: a.href,
+              candidatosTexto: acha(["applicant", "candidat", "tvm"]),
+            };
+          })
+          .filter((c) => c.titulo.length > 2 && c.link.length > 0);
+      })
+      .catch(() => [] as RawCard[]);
+
+    return dedup(universal);
   }
 
   async detalhe(link: string): Promise<{ descricao: string }> {
