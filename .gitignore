@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.log
+.env
+.DS_Store
+# dados de candidatos (podem conter PII) e saidas geradas — nunca versionar
+data/
+candidatos/
+saida/

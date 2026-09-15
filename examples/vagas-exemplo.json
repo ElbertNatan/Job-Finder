@@ -1,0 +1,5 @@
+[
+  { "id": "py1", "titulo": "Desenvolvedor Python Django", "empresa": "DataCorp", "local": "Remoto", "link": "https://exemplo/py1", "snippet": "Buscamos Python, Django e SQL para time de dados." },
+  { "id": "node1", "titulo": "Engenheiro Backend Node.js", "empresa": "PayTech", "local": "Remoto", "link": "https://exemplo/node1", "snippet": "Node.js, TypeScript, PostgreSQL, Docker e AWS obrigatorios. Kafka desejavel." },
+  { "id": "front1", "titulo": "Frontend React", "empresa": "ShopX", "local": "Sao Paulo", "link": "https://exemplo/front1", "snippet": "React, Vue e CSS. Foco em UI." }
+]

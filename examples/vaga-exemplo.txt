@@ -1,0 +1,17 @@
+Vaga: Pessoa Engenheira de Software Backend Senior (Remoto)
+
+Sobre a vaga:
+Estamos procurando uma pessoa engenheira backend senior para atuar no time de
+plataforma de pagamentos.
+
+Requisitos obrigatorios:
+- Experiencia solida com Node.js e TypeScript
+- Bancos relacionais (PostgreSQL)
+- Docker e Kubernetes
+- AWS
+- Mensageria (Kafka)
+
+Desejavel:
+- GraphQL
+- Experiencia com microservicos e observabilidade
+- Ingles avancado
