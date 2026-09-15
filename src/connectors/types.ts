@@ -19,6 +19,8 @@ export interface VagaResumo {
   local: string;
   link: string;
   snippet: string;
+  /** Nº de candidatos que se candidataram/clicaram (quando o site expoe — ex.: LinkedIn). null se desconhecido. */
+  candidatos?: number | null;
 }
 
 export interface CampoFormulario {

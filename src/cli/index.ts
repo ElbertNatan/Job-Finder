@@ -80,12 +80,18 @@ program
   .description("Ranqueia vagas (JSON com VagaResumo[]) por aderencia ao perfil")
   .requiredOption("--perfil <perfil.json>", "perfil.json do candidato")
   .requiredOption("--vagas <vagas.json>", "arquivo JSON com uma lista de vagas")
+  .option("--poucos-candidatos", "priorizar vagas com poucos candidatos (regra do LinkedIn)", false)
+  .option("--limite <n>", "limite de candidatos para a prioridade", "100")
   .action((opts) => {
     const profile = loadProfile(opts.perfil);
     const vagas = JSON.parse(readFileSync(opts.vagas, "utf-8")) as VagaResumo[];
-    const ranked = rankVagas(profile, vagas);
+    const ranked = rankVagas(profile, vagas, {
+      priorizarPoucosCandidatos: !!opts.poucosCandidatos,
+      limiteCandidatos: Number(opts.limite),
+    });
     for (const r of ranked) {
-      console.log(`[${r.score}%] ${r.vaga.titulo} — ${r.vaga.empresa} (${r.vaga.local})`);
+      const cand = r.vaga.candidatos != null ? ` | candidatos: ${r.vaga.candidatos}` : "";
+      console.log(`[${r.score}%] ${r.vaga.titulo} — ${r.vaga.empresa} (${r.vaga.local})${cand}`);
       console.log(`       bate: ${r.matched.join(", ") || "-"} | falta: ${r.missing.join(", ") || "-"}`);
     }
   });

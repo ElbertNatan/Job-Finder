@@ -125,6 +125,11 @@ Vêm das *preferências de vaga* do perfil: cargo/keywords, senioridade, cidade/
 
 Para cada vaga encontrada, o agente calcula um **score de aderência vaga↔perfil** (match de keywords, senioridade, requisitos obrigatórios vs. desejáveis, localidade/modelo) e apresenta a lista **ordenada**, com uma justificativa curta por vaga ("bate em X e Y; falta Z"). O humano escolhe em quais avançar.
 
+### Regras fixas de filtragem/priorização
+
+- **Empresas bloqueadas (qualquer site):** vagas da **BairesDev** são **sempre ignoradas** (comparação por substring do nome da empresa — pega "BairesDev", "bairesdev LLC", etc.). Lista extensível em `src/discovery/filtros.ts` (`EMPRESAS_BLOQUEADAS`).
+- **LinkedIn — priorizar vagas com poucos candidatos:** ao buscar no LinkedIn, vagas com **menos de 100 candidatos** (que clicaram para se candidatar) vêm **primeiro**; só depois disso desempata pela aderência. O conector do LinkedIn preenche `VagaResumo.candidatos` e o ranqueamento roda com `priorizarPoucosCandidatos: true, limiteCandidatos: 100`.
+
 ---
 
 ## 6. Estágio 3 — Adequação / ATS

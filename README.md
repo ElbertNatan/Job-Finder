@@ -16,9 +16,13 @@ Este repositório contém o **núcleo verificável** do agente, com 40 testes au
 |---|---|---|
 | 1. Perfil-Mestre | `src/profile`, `src/ingest` | ✅ schema + ingestão do `.md` de dados + merge de fontes + detecção de lacunas |
 | 2. Descoberta | `src/discovery`, `src/connectors` | ✅ ranqueamento por aderência + interface plugável de conectores + stub |
-| 3. Adequação/ATS | `src/tailor`, `src/render` | ✅ gap-analysis + score ATS + currículo HTML (preview=PDF) |
+| 3. Adequação/ATS | `src/tailor`, `src/render` | ✅ gap-analysis + score ATS + edições + currículo HTML (preview=PDF) |
+| 3.1 Preview & revisão | `web/` (React+Vite) | ✅ UI que roda o core no navegador: preview ao vivo + propor mudanças em loop |
 | 4. Candidatura | `src/connectors` | ✅ contrato com gate humano; conectores reais (Gupy/LinkedIn) pendentes |
 | 5. Rastreador | `src/tracker` | ✅ persistência JSON de candidaturas |
+
+**Regras fixas de descoberta:** BairesDev é sempre ignorada (qualquer site); no LinkedIn,
+vagas com &lt; 100 candidatos vêm primeiro. Ver `src/discovery/filtros.ts` e `rankVagas`.
 
 **Pendente (próximas fases):** conectores reais via Playwright/computer-use (exigem contas/credenciais),
 adapters de LLM (normalização de `.md` livre e reescrita de bullets), ingestão de PDF/DOCX,
@@ -55,6 +59,19 @@ npx tsx src/cli/index.ts tracker
 
 O `curriculo.html` gerado é o **preview**: abra no navegador — é idêntico ao PDF.
 
+## UI de Preview & Revisão
+
+```bash
+npm run web:dev     # abre o app em http://localhost:5173
+npm run web:build   # build de producao em web/dist
+```
+
+A tela mostra, lado a lado, os dados (`.md`) + a vaga e o **preview do currículo ao vivo**.
+No painel você **propõe mudanças** (sobrescrever resumo, ocultar experiências/competências) e
+o preview + score ATS **atualizam na hora**. "Aprovar preview" marca o aceite (no fluxo completo,
+o passo seguinte é o gate de submissão no site). Todo o núcleo (adequação/render) roda no navegador —
+sem servidor.
+
 ## Testes
 
 ```bash
@@ -74,7 +91,8 @@ src/
   connectors/  interface plugavel por site + registry + stub
   tracker/     rastreador de candidaturas (JSON)
   cli/         CLI que amarra o pipeline
-test/          espelha src/ (TDD)
+web/           app React+Vite de preview & revisão (roda o core no navegador)
+test/          espelha src/ (TDD), incl. render da UI (jsdom)
 examples/      dados e vaga de exemplo para experimentar
 ```
 
