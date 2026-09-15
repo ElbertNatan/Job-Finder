@@ -1,6 +1,6 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { chromium, type BrowserContext } from "playwright";
+import { chromium, type Browser, type BrowserContext } from "playwright";
 import type { Criterios } from "./types.js";
 import type { RawCard, SiteDriver } from "./browserConnector.js";
 import type { SiteConfig } from "./sites.js";
@@ -34,6 +34,7 @@ function dedup(cards: RawCard[]): RawCard[] {
 
 export class PlaywrightSiteDriver implements SiteDriver {
   private ctx: BrowserContext | null = null;
+  private browser: Browser | null = null;
   private abrindo: Promise<BrowserContext> | null = null;
 
   constructor(
@@ -61,8 +62,23 @@ export class PlaywrightSiteDriver implements SiteDriver {
   }
 
   private async lancar(): Promise<BrowserContext> {
-    // Tenta o perfil persistente (mantem o login); se nao abrir, cai num perfil novo
-    // para garantir que a busca funcione mesmo assim (sites sem login).
+    // Sites SEM login: navegador headless efemero (sem perfil persistente) — nao tem
+    // lock de perfil nem janela, entao nao cai no "context has been closed". O usuario
+    // nao precisa ver a busca; so os resultados importam.
+    if (!this.config.requerLogin) {
+      const browser = await chromium.launch({ headless: true });
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      await ctx.addInitScript("window.__name = window.__name || function (f) { return f; };");
+      ctx.on("close", () => {
+        if (this.ctx === ctx) this.ctx = null;
+      });
+      this.browser = browser;
+      this.ctx = ctx;
+      return ctx;
+    }
+
+    // Sites COM login (LinkedIn): perfil persistente headed (para logar e manter a sessao).
+    // Tenta o perfil persistente; se nao abrir, cai num perfil novo para nao travar.
     const dirs = [this.opts.userDataDir, `${this.opts.userDataDir}-${Date.now()}`];
     let ultimoErro: unknown;
     for (const dir of dirs) {
@@ -96,6 +112,10 @@ export class PlaywrightSiteDriver implements SiteDriver {
   private async getContexto(): Promise<BrowserContext> {
     if (this.conectado(this.ctx)) return this.ctx;
     this.ctx = null;
+    if (this.browser) {
+      await this.browser.close().catch(() => {});
+      this.browser = null;
+    }
     if (!this.abrindo) this.abrindo = this.lancar().finally(() => (this.abrindo = null));
     return this.abrindo;
   }
@@ -118,7 +138,13 @@ export class PlaywrightSiteDriver implements SiteDriver {
     } catch {
       /* ja fechado */
     }
+    try {
+      await this.browser?.close();
+    } catch {
+      /* ja fechado */
+    }
     this.ctx = null;
+    this.browser = null;
     this.abrindo = null;
   }
 
