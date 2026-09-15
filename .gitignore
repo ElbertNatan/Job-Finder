@@ -7,3 +7,5 @@ dist/
 data/
 candidatos/
 saida/
+# sessao logada do navegador (persistente) — nunca versionar
+.linkedin-session/
