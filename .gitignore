@@ -6,6 +6,7 @@ dist/
 # dados de candidatos (podem conter PII) e saidas geradas — nunca versionar
 data/
 candidatos/
+curriculo/
 saida/
 # sessao logada do navegador (persistente) — nunca versionar
 .linkedin-session/

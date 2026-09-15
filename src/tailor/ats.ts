@@ -10,12 +10,18 @@ import type { Profile } from "../profile/schema.js";
  */
 
 const DEFAULT_VOCAB = [
-  "Node.js", "TypeScript", "JavaScript", "Python", "Java", "Kotlin", "Go", "Rust", "C#", "C++", "PHP", "Ruby",
-  "React", "Vue", "Angular", "Svelte", "Next.js", "Spring", "Django", "Flask", "Grails", "Rails", "Laravel",
-  "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform",
-  "SQL", "PostgreSQL", "MySQL", "MongoDB", "Redis", "Kafka", "RabbitMQ", "Elasticsearch",
-  "Git", "REST", "GraphQL", "gRPC", "Linux", "CI/CD", "Scrum", "Agile", "Kanban",
+  "Node.js", "TypeScript", "JavaScript", "Python", "Java", "Kotlin", "Groovy", "Go", "Rust", "C#", "C++", "PHP", "Ruby", "Dart", "Delphi", "Scala",
+  "React", "Vue", "Angular", "Svelte", "Next.js", "Flutter", "Express", "NestJS", "jQuery", "Bootstrap",
+  "Spring", "Spring Boot", "Hibernate", "Django", "Flask", "Grails", "Rails", "Laravel", ".NET",
+  "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform", "Jenkins", "GitLab", "Liquibase",
+  "SQL", "PostgreSQL", "MySQL", "MongoDB", "Oracle", "SQL Server", "Redis", "Kafka", "RabbitMQ", "Elasticsearch", "Firebase",
+  "Git", "REST", "SOAP", "GraphQL", "gRPC", "Linux", "CI/CD", "Scrum", "Agile", "Kanban",
 ];
+
+/** Detecta competencias tecnicas conhecidas dentro de um texto livre (ex.: texto do PDF). */
+export function skillsDoTexto(texto: string): string[] {
+  return extractKeywords(texto, DEFAULT_VOCAB);
+}
 
 export function normalize(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
@@ -49,6 +55,8 @@ export function candidateSkills(p: Profile): string[] {
     ...p.competencias.ferramentas,
     ...p.experiencias.flatMap((e) => e.tecnologias),
     ...p.projetos.flatMap((pr) => pr.stack),
+    // rede de seguranca: competencias mencionadas no texto livre (resumo, extras do PDF)
+    ...skillsDoTexto(`${p.objetivo.resumo ?? ""}\n${p.extras ?? ""}`),
   ];
   const seen = new Set<string>();
   const out: string[] = [];
