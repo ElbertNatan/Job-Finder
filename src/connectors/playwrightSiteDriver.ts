@@ -43,59 +43,73 @@ export class PlaywrightSiteDriver implements SiteDriver {
 
   /**
    * Remove os locks de perfil que sobram quando um Chromium anterior nao fechou
-   * direito — a causa do erro "Target page, context or browser has been closed"
-   * (o novo processo detecta o lock e sai na hora, sem abrir a janela).
+   * direito — evita o "Target page, context or browser has been closed" (o novo
+   * processo detecta o lock e sai na hora, sem abrir a janela).
    */
-  private limparLock(): void {
+  private limparLock(dir: string): void {
     for (const f of ["SingletonLock", "SingletonCookie", "SingletonSocket", "lockfile"]) {
       try {
-        rmSync(join(this.opts.userDataDir, f), { force: true, recursive: true });
+        rmSync(join(dir, f), { force: true, recursive: true });
       } catch {
         /* ok */
       }
     }
   }
 
-  private async getContexto(): Promise<BrowserContext> {
-    if (this.ctx) return this.ctx;
-    // Um unico launch em voo (evita duas requisicoes lancarem o mesmo perfil juntas).
-    if (!this.abrindo) {
-      this.abrindo = (async () => {
-        this.limparLock();
-        const ctx = await chromium.launchPersistentContext(this.opts.userDataDir, {
-          headless: this.opts.headless ?? false,
-          viewport: { width: 1280, height: 900 },
-        });
-        // Shim para o helper `__name` que o tsx/esbuild injeta nas funcoes: sem ele,
-        // os callbacks de $$eval (serializados para o navegador) quebram com
-        // "ReferenceError: __name is not defined" e a captura retorna vazio.
-        await ctx.addInitScript("window.__name = window.__name || function (f) { return f; };");
-        ctx.on("close", () => {
-          if (this.ctx === ctx) this.ctx = null;
-        });
-        this.ctx = ctx;
-        return ctx;
-      })().finally(() => {
-        this.abrindo = null;
-      });
+  private conectado(ctx: BrowserContext | null): ctx is BrowserContext {
+    return !!ctx && (ctx.browser()?.isConnected() ?? false);
+  }
+
+  private async lancar(): Promise<BrowserContext> {
+    // Tenta o perfil persistente (mantem o login); se nao abrir, cai num perfil novo
+    // para garantir que a busca funcione mesmo assim (sites sem login).
+    const dirs = [this.opts.userDataDir, `${this.opts.userDataDir}-${Date.now()}`];
+    let ultimoErro: unknown;
+    for (const dir of dirs) {
+      for (let i = 0; i < 2; i++) {
+        try {
+          this.limparLock(dir);
+          const ctx = await chromium.launchPersistentContext(dir, {
+            headless: this.opts.headless ?? false,
+            viewport: { width: 1280, height: 900 },
+          });
+          if (!(ctx.browser()?.isConnected() ?? false)) {
+            await ctx.close().catch(() => {});
+            throw new Error("o navegador abriu ja fechado");
+          }
+          // Shim do helper `__name` (tsx/esbuild) para os callbacks de $$eval nao quebrarem.
+          await ctx.addInitScript("window.__name = window.__name || function (f) { return f; };");
+          ctx.on("close", () => {
+            if (this.ctx === ctx) this.ctx = null;
+          });
+          this.ctx = ctx;
+          return ctx;
+        } catch (e) {
+          ultimoErro = e;
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
     }
+    throw ultimoErro ?? new Error("nao foi possivel abrir o navegador");
+  }
+
+  private async getContexto(): Promise<BrowserContext> {
+    if (this.conectado(this.ctx)) return this.ctx;
+    this.ctx = null;
+    if (!this.abrindo) this.abrindo = this.lancar().finally(() => (this.abrindo = null));
     return this.abrindo;
   }
 
   private async page() {
-    // Resiliente: se o contexto foi fechado (janela fechada, lock antigo), relanca.
-    for (let tentativa = 0; tentativa < 2; tentativa++) {
-      try {
-        const ctx = await this.getContexto();
-        return ctx.pages()[0] ?? (await ctx.newPage());
-      } catch (e) {
-        this.ctx = null;
-        this.abrindo = null;
-        this.limparLock();
-        if (tentativa === 1) throw e;
-      }
+    const ctx = await this.getContexto();
+    try {
+      return ctx.pages()[0] ?? (await ctx.newPage());
+    } catch {
+      // contexto morreu entre o launch e o uso: descarta e relanca uma vez.
+      this.ctx = null;
+      const novo = await this.getContexto();
+      return novo.pages()[0] ?? (await novo.newPage());
     }
-    throw new Error("nao foi possivel abrir o navegador");
   }
 
   async close(): Promise<void> {
