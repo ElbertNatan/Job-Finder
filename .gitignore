@@ -9,3 +9,4 @@ candidatos/
 saida/
 # sessao logada do navegador (persistente) — nunca versionar
 .linkedin-session/
+.browser-session/

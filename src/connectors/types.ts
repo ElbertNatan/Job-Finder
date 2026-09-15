@@ -39,7 +39,17 @@ export interface VagaDetalhe extends VagaResumo {
 export interface Artefatos {
   curriculoArquivo: string;
   carta: string;
+  /** respostas ja conhecidas para perguntas de triagem (por label normalizado ou nome do campo). */
   respostas: Record<string, string>;
+  /** dados basicos do candidato para autopreencher campos padrao do formulario. */
+  dadosBasicos?: {
+    nome?: string | null;
+    email?: string | null;
+    telefone?: string | null;
+    cidade?: string | null;
+    linkedin?: string | null;
+    pretensaoSalarial?: string | null;
+  };
 }
 
 /** Resultado de uma tentativa de candidatura. NUNCA "submetida" sem aprovacao humana. */

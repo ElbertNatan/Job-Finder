@@ -18,7 +18,7 @@ Este repositório contém o **núcleo verificável** do agente, com 40 testes au
 | 2. Descoberta | `src/discovery`, `src/connectors` | ✅ ranqueamento por aderência + interface plugável de conectores + stub |
 | 3. Adequação/ATS | `src/tailor`, `src/render` | ✅ gap-analysis + score ATS + edições + currículo HTML (preview=PDF) |
 | 3.1 Preview & revisão | `web/` (React+Vite) | ✅ UI que roda o core no navegador: preview ao vivo + propor mudanças em loop |
-| 4. Candidatura | `src/connectors` | ✅ contrato com gate humano; **conector LinkedIn** (lógica testada + driver Playwright); Gupy pendente |
+| 4. Candidatura | `src/connectors` | ✅ conector genérico + **6 sites** (LinkedIn, Gupy, Vagas.com, InfoJobs, Indeed, Catho) via config; Easy Apply com gate humano |
 | 5. Rastreador | `src/tracker` | ✅ persistência JSON de candidaturas |
 
 **Regras fixas de descoberta:** BairesDev é sempre ignorada (qualquer site); no LinkedIn,
@@ -72,24 +72,36 @@ o preview + score ATS **atualizam na hora**. "Aprovar preview" marca o aceite (n
 o passo seguinte é o gate de submissão no site). Todo o núcleo (adequação/render) roda no navegador —
 sem servidor.
 
-## Conector do LinkedIn (busca real)
+## Início rápido (Windows)
 
-A **lógica** do conector (mapeamento, parse de nº de candidatos, bloqueio de empresas,
-gate humano) é 100% testada. O **acesso ao site** usa Playwright e precisa de uma
-sessão logada:
+Dê **duplo clique em `JobFinder.bat`**. Na primeira vez ele instala as dependências
+(e o navegador do Playwright) e abre o app no navegador. Nas próximas, só abre.
+
+## Conectores de sites (busca real)
+
+Arquitetura **config-driven**: cada site é uma entrada em `src/connectors/sites.ts`
+(URL de busca + seletores). A **lógica** (mapeamento, parse de nº de candidatos,
+bloqueio de empresas, preenchimento de formulário, gate humano) é única e 100% testada;
+o **acesso ao site** usa Playwright.
+
+Sites cobertos: **linkedin · gupy · vagas · infojobs · indeed · catho**.
 
 ```bash
-npx playwright install chromium          # uma vez
-npm run linkedin -- "Engenheiro Backend" "Sao Paulo"
+npx playwright install chromium                        # uma vez
+npm run buscar -- linkedin "Engenheiro Backend" "Sao Paulo"
+npm run buscar -- vagas "Analista de Dados"
 ```
 
-Na primeira execução, a janela do Chromium abre para você **fazer login no LinkedIn**;
-a sessão fica salva em `.linkedin-session/` e é reaproveitada. O agente **não guarda senha**.
-A busca já aplica suas regras: **vagas com < 100 candidatos primeiro** e **BairesDev ignorada**.
-A candidatura para no **gate humano** — nunca clica em "Enviar" sozinho.
+- Regras aplicadas sempre: **BairesDev ignorada** em qualquer site; no **LinkedIn**,
+  **vagas com < 100 candidatos primeiro**.
+- Sites que exigem login abrem o navegador para você logar na 1ª vez; a sessão fica em
+  `.browser-session/<site>` (o agente **não guarda senha**).
+- **Candidatura (Easy Apply):** o agente autopreenche os campos que consegue a partir do
+  perfil/currículo, **lista o que faltar** para você completar, e **para na etapa de
+  revisão** — nunca clica em "Enviar". Captcha/anti-bot ficam com você.
 
-> Os seletores do LinkedIn mudam com o tempo; se a busca vier vazia, ajuste-os em
-> `src/connectors/linkedin/playwrightDriver.ts` (a lógica testável não muda).
+> Os seletores dos sites mudam com o tempo; se a busca vier vazia, ajuste-os em
+> `src/connectors/sites.ts` (a lógica testável não muda).
 
 ## Testes
 
