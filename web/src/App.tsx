@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ingestMarkdown } from "../../src/ingest/markdown.js";
 import { pdfTextToDadosMd } from "../../src/ingest/pdfText.js";
 import { detectGaps } from "../../src/profile/gaps.js";
@@ -19,7 +19,6 @@ const PASSOS: { n: Passo; titulo: string; ajuda: string }[] = [
 ];
 
 const SITES: { v: string; nome: string }[] = [
-  { v: "exemplo", nome: "Exemplo (offline)" },
   { v: "linkedin", nome: "LinkedIn" },
   { v: "gupy", nome: "Gupy" },
   { v: "vagas", nome: "Vagas.com" },
@@ -37,7 +36,7 @@ export function App() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Passo 2 — busca de vagas (o agente pesquisa, com base no currículo)
-  const [site, setSite] = useState<string>("exemplo");
+  const [site, setSite] = useState<string>("linkedin");
   const [cargoOverride, setCargoOverride] = useState<string | null>(null);
   const [localBusca, setLocalBusca] = useState<string>("Remoto");
   const [vagas, setVagas] = useState<VagaRankeada[] | null>(null);
@@ -115,10 +114,7 @@ export function App() {
       });
       const data = (await resp.json().catch(() => ({}))) as { vagas?: VagaRankeada[]; precisaLogin?: boolean; erro?: string };
       if (!resp.ok) {
-        setErroBusca(
-          `A busca em ${nomeSite} falhou: ${data.erro ?? resp.status}. ` +
-            `Se persistir, verifique o Chromium do Playwright ou use "Exemplo (offline)".`,
-        );
+        setErroBusca(`A busca em ${nomeSite} falhou: ${data.erro ?? resp.status}. Se persistir, verifique o Chromium do Playwright.`);
         return;
       }
       if (data.precisaLogin) {
@@ -134,12 +130,6 @@ export function App() {
       setBuscando(false);
     }
   }
-
-  // O agente ja sai buscando no modo offline ao entrar no passo 2 (sem exigir cargo).
-  useEffect(() => {
-    if (passo === 2 && site === "exemplo" && vagas === null && !buscando) void buscarVagas();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passo, site]);
 
   async function abrirLogin() {
     setAbrindoLogin(true);
@@ -379,10 +369,8 @@ export function App() {
 
             {vagas && vagas.length === 0 && (
               <p className="aviso">
-                Nenhuma vaga capturada
-                {site !== "exemplo"
-                  ? `. Se elas aparecem na janela do ${nomeSite} mas não aqui, os seletores do site podem ter mudado (ajuste em src/connectors/sites.ts). Tente rolar a página aberta e buscar de novo.`
-                  : ". Tente outro cargo."}
+                Nenhuma vaga capturada. Se elas aparecem na janela do {nomeSite} mas não aqui, os seletores do site podem ter
+                mudado (ajuste em src/connectors/sites.ts). Tente rolar a página aberta e buscar de novo.
               </p>
             )}
 

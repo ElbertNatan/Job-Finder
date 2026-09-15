@@ -77,12 +77,12 @@ sem servidor.
 Dê **duplo clique em `JobFinder.bat`**. Na primeira vez ele instala as dependências
 (e o navegador do Playwright), prepara e abre o app em **http://localhost:8787**.
 
-No app: (1) traga seu currículo (PDF/colar/exemplo) → (2) **o agente busca as vagas**
+No app: (1) traga seu currículo (PDF/colar) → (2) **o agente busca as vagas** nos sites
 (o cargo já vem do seu currículo; você só escolhe o site — nada de colar descrição) →
 (3) escolha uma vaga e revise o currículo já adaptado, com preview igual ao PDF.
 
-> Sites reais (LinkedIn etc.) exigem login e o Chromium do Playwright (o `JobFinder.bat`
-> instala). Para testar na hora, sem nada disso, use o site **"Exemplo (offline)"**.
+> Os sites exigem login e o Chromium do Playwright (o `JobFinder.bat` instala). Na 1ª
+> busca de cada site o navegador abre para você entrar; a sessão fica salva.
 
 ## O agente busca as vagas (você não cola descrição)
 
@@ -91,8 +91,7 @@ ranqueia pelo seu perfil e mostra a lista; ao escolher uma vaga, ele mesmo pega 
 descrição e adapta o currículo. A busca roda no **servidor local** (`npm run serve`,
 porta 8787), porque usa Playwright (Node) — o navegador não roda os sites sozinho.
 
-- **Modo "Exemplo (offline)"**: funciona na hora, sem login, com vagas de demonstração.
-- **Sites reais** (`linkedin · gupy · vagas · infojobs · indeed · catho`): config-driven
+- **Sites** (`linkedin · gupy · vagas · infojobs · indeed · catho`): config-driven
   em `src/connectors/sites.ts` (URL + seletores). Abrem o navegador para você logar na
   1ª vez; a sessão fica em `.browser-session/<site>` (o agente **não guarda senha**).
 - Regras sempre aplicadas: **BairesDev ignorada**; no **LinkedIn**, **vagas com < 100
