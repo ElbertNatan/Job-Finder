@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ingestMarkdown } from "../../src/ingest/markdown.js";
 import { pdfTextToDadosMd } from "../../src/ingest/pdfText.js";
 import { detectGaps } from "../../src/profile/gaps.js";
+import { termosDeBusca } from "../../src/discovery/query.js";
 import { tailorResume } from "../../src/tailor/ats.js";
 import { applyResumeEdits, type ResumeEdits } from "../../src/tailor/edits.js";
 import { renderResumeHtml } from "../../src/render/html.js";
@@ -35,10 +36,9 @@ export function App() {
   const [pdfMsg, setPdfMsg] = useState<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Passo 2 — busca de vagas (o agente pesquisa)
-  const perfilInicial = useMemo(() => ingestMarkdown(exemploMd), []);
+  // Passo 2 — busca de vagas (o agente pesquisa, com base no currículo)
   const [site, setSite] = useState<string>("exemplo");
-  const [cargoBusca, setCargoBusca] = useState<string>(perfilInicial.objetivo.cargoAlvo ?? "");
+  const [cargoOverride, setCargoOverride] = useState<string | null>(null);
   const [localBusca, setLocalBusca] = useState<string>("Remoto");
   const [vagas, setVagas] = useState<VagaRankeada[] | null>(null);
   const [buscando, setBuscando] = useState(false);
@@ -53,7 +53,7 @@ export function App() {
   const [ocultarComp, setOcultarComp] = useState<Set<string>>(new Set());
   const [aprovado, setAprovado] = useState(false);
 
-  const { html, score, ajustes, experiencias, tecnicas, gaps } = useMemo(() => {
+  const { html, score, ajustes, experiencias, tecnicas, gaps, queryCurriculo } = useMemo(() => {
     const profile = ingestMarkdown(md);
     const tailored = tailorResume(profile, jobText);
     const edits: ResumeEdits = {
@@ -69,8 +69,12 @@ export function App() {
       experiencias: tailored.profile.experiencias,
       tecnicas: tailored.profile.competencias.tecnicas,
       gaps: detectGaps(profile),
+      queryCurriculo: termosDeBusca(profile),
     };
   }, [md, jobText, resumo, ocultarExp, ocultarComp]);
+
+  const cargoEfetivo = cargoOverride ?? queryCurriculo;
+  const nomeSite = SITES.find((s) => s.v === site)?.nome ?? site;
 
   const toggle = <T,>(set: Set<T>, key: T): Set<T> => {
     const next = new Set(set);
@@ -101,19 +105,32 @@ export function App() {
       const resp = await fetch("/api/buscar", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ site, cargo: cargoBusca, localidade: localBusca, profileMd: md }),
+        body: JSON.stringify({ site, cargo: cargoEfetivo, localidade: localBusca, profileMd: md }),
       });
-      if (!resp.ok) throw new Error(String(resp.status));
-      const data = (await resp.json()) as { vagas: VagaRankeada[] };
-      setVagas(data.vagas);
+      const data = (await resp.json().catch(() => ({}))) as { vagas?: VagaRankeada[]; erro?: string };
+      if (!resp.ok) {
+        setErroBusca(
+          `A busca em ${nomeSite} falhou: ${data.erro ?? resp.status}. ` +
+            `Sites reais exigem login (abre o navegador) e o Chromium do Playwright. ` +
+            `Para testar sem isso, use "Exemplo (offline)".`,
+        );
+        return;
+      }
+      setVagas(data.vagas ?? []);
     } catch {
       setErroBusca(
-        "Não consegui buscar agora. Inicie o servidor (JobFinder.bat ou `npm run serve`) — ou cole a descrição manualmente.",
+        "Não consegui falar com o servidor. Abra o app pelo JobFinder.bat (ou rode `npm run serve`) — ou cole a descrição manualmente.",
       );
     } finally {
       setBuscando(false);
     }
   }
+
+  // O agente ja sai buscando no modo offline ao entrar no passo 2 (sem exigir cargo).
+  useEffect(() => {
+    if (passo === 2 && site === "exemplo" && vagas === null && !buscando) void buscarVagas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passo, site]);
 
   async function escolherVaga(r: VagaRankeada) {
     setVagaEscolhida(`${r.vaga.titulo} — ${r.vaga.empresa}`);
@@ -252,7 +269,10 @@ export function App() {
           <section className="panel">
             <header className="panel-head">
               <h1>O agente busca as vagas</h1>
-              <p>Diga onde e o cargo. Ele pesquisa, ignora a BairesDev e, no LinkedIn, prioriza vagas com menos de 100 candidatos.</p>
+              <p>
+                A busca sai do seu currículo — você não precisa digitar o cargo. Escolha o site e busque; ele ignora a
+                BairesDev e, no LinkedIn, prioriza vagas com menos de 100 candidatos.
+              </p>
             </header>
 
             <div className="busca-form">
@@ -267,14 +287,19 @@ export function App() {
                 </select>
               </label>
               <label className="campo-inline cresce">
-                <span>Cargo</span>
-                <input type="text" value={cargoBusca} onChange={(e) => setCargoBusca(e.target.value)} placeholder="ex.: Engenheiro Backend" />
+                <span>Cargo (do seu currículo — ajuste se quiser)</span>
+                <input
+                  type="text"
+                  value={cargoEfetivo}
+                  onChange={(e) => setCargoOverride(e.target.value)}
+                  placeholder="detectado a partir do currículo"
+                />
               </label>
               <label className="campo-inline">
                 <span>Local</span>
                 <input type="text" value={localBusca} onChange={(e) => setLocalBusca(e.target.value)} placeholder="Remoto, SP…" />
               </label>
-              <button className="btn primario" onClick={buscarVagas} disabled={buscando}>
+              <button className="btn primario" onClick={buscarVagas} disabled={buscando || !cargoEfetivo.trim()}>
                 {buscando ? "Buscando…" : "Buscar"}
               </button>
             </div>

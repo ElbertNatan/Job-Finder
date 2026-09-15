@@ -78,8 +78,11 @@ Dê **duplo clique em `JobFinder.bat`**. Na primeira vez ele instala as dependê
 (e o navegador do Playwright), prepara e abre o app em **http://localhost:8787**.
 
 No app: (1) traga seu currículo (PDF/colar/exemplo) → (2) **o agente busca as vagas**
-(você só diz site + cargo; nada de colar descrição) → (3) escolha uma vaga e revise o
-currículo já adaptado, com preview igual ao PDF.
+(o cargo já vem do seu currículo; você só escolhe o site — nada de colar descrição) →
+(3) escolha uma vaga e revise o currículo já adaptado, com preview igual ao PDF.
+
+> Sites reais (LinkedIn etc.) exigem login e o Chromium do Playwright (o `JobFinder.bat`
+> instala). Para testar na hora, sem nada disso, use o site **"Exemplo (offline)"**.
 
 ## O agente busca as vagas (você não cola descrição)
 

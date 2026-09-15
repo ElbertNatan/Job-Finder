@@ -17,9 +17,10 @@ if not exist "node_modules\" (
     pause
     exit /b 1
   )
-  echo Instalando o navegador do Playwright ^(usado para buscar/aplicar em vagas^)...
-  call npx playwright install chromium
 )
+
+echo Garantindo o navegador do Playwright ^(para buscar em sites reais; rapido se ja instalado^)...
+call npx playwright install chromium
 
 echo.
 echo Preparando o aplicativo...
