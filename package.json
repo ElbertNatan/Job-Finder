@@ -15,6 +15,8 @@
     "test:watch": "vitest",
     "cli": "tsx src/cli/index.ts",
     "buscar": "tsx src/connectors/run.ts",
+    "serve": "tsx src/server/run.ts",
+    "app": "npm run web:build && npm run serve",
     "web:dev": "vite --config web/vite.config.ts",
     "web:build": "vite build --config web/vite.config.ts"
   },

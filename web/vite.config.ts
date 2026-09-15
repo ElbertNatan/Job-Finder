@@ -7,4 +7,6 @@ export default defineConfig({
   root: import.meta.dirname,
   plugins: [react()],
   build: { outDir: "dist", emptyOutDir: true },
+  // Em dev (vite), encaminha /api para o servidor local (npm run serve).
+  server: { proxy: { "/api": "http://localhost:8787" } },
 });

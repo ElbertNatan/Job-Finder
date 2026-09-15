@@ -22,6 +22,15 @@ if not exist "node_modules\" (
 )
 
 echo.
-echo Abrindo o JobFinder em http://localhost:5173 ...
+echo Preparando o aplicativo...
+call npm run web:build
+if errorlevel 1 (
+  echo Falha ao preparar o app.
+  pause
+  exit /b 1
+)
+
+echo Abrindo o JobFinder em http://localhost:8787 ...
+start "" http://localhost:8787
 echo Feche esta janela para encerrar o aplicativo.
-call npm run web:dev -- --open
+call npm run serve

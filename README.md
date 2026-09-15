@@ -75,32 +75,38 @@ sem servidor.
 ## Início rápido (Windows)
 
 Dê **duplo clique em `JobFinder.bat`**. Na primeira vez ele instala as dependências
-(e o navegador do Playwright) e abre o app no navegador. Nas próximas, só abre.
+(e o navegador do Playwright), prepara e abre o app em **http://localhost:8787**.
 
-## Conectores de sites (busca real)
+No app: (1) traga seu currículo (PDF/colar/exemplo) → (2) **o agente busca as vagas**
+(você só diz site + cargo; nada de colar descrição) → (3) escolha uma vaga e revise o
+currículo já adaptado, com preview igual ao PDF.
 
-Arquitetura **config-driven**: cada site é uma entrada em `src/connectors/sites.ts`
-(URL de busca + seletores). A **lógica** (mapeamento, parse de nº de candidatos,
-bloqueio de empresas, preenchimento de formulário, gate humano) é única e 100% testada;
-o **acesso ao site** usa Playwright.
+## O agente busca as vagas (você não cola descrição)
 
-Sites cobertos: **linkedin · gupy · vagas · infojobs · indeed · catho**.
+O passo 2 do app é uma **busca**: você informa site + cargo e o agente pesquisa,
+ranqueia pelo seu perfil e mostra a lista; ao escolher uma vaga, ele mesmo pega a
+descrição e adapta o currículo. A busca roda no **servidor local** (`npm run serve`,
+porta 8787), porque usa Playwright (Node) — o navegador não roda os sites sozinho.
+
+- **Modo "Exemplo (offline)"**: funciona na hora, sem login, com vagas de demonstração.
+- **Sites reais** (`linkedin · gupy · vagas · infojobs · indeed · catho`): config-driven
+  em `src/connectors/sites.ts` (URL + seletores). Abrem o navegador para você logar na
+  1ª vez; a sessão fica em `.browser-session/<site>` (o agente **não guarda senha**).
+- Regras sempre aplicadas: **BairesDev ignorada**; no **LinkedIn**, **vagas com < 100
+  candidatos primeiro**.
+- **Candidatura (Easy Apply):** o agente autopreenche o que consegue a partir do
+  perfil/currículo, **lista o que faltar**, e **para na etapa de revisão** — nunca clica
+  em "Enviar". Captcha/anti-bot ficam com você.
+
+Desenvolvimento (hot reload): `npm run serve` numa aba e `npm run web:dev` noutra
+(o Vite faz proxy de `/api` para o servidor). Ou linha de comando pura:
 
 ```bash
-npx playwright install chromium                        # uma vez
+npx playwright install chromium              # uma vez, para sites reais
 npm run buscar -- linkedin "Engenheiro Backend" "Sao Paulo"
-npm run buscar -- vagas "Analista de Dados"
 ```
 
-- Regras aplicadas sempre: **BairesDev ignorada** em qualquer site; no **LinkedIn**,
-  **vagas com < 100 candidatos primeiro**.
-- Sites que exigem login abrem o navegador para você logar na 1ª vez; a sessão fica em
-  `.browser-session/<site>` (o agente **não guarda senha**).
-- **Candidatura (Easy Apply):** o agente autopreenche os campos que consegue a partir do
-  perfil/currículo, **lista o que faltar** para você completar, e **para na etapa de
-  revisão** — nunca clica em "Enviar". Captcha/anti-bot ficam com você.
-
-> Os seletores dos sites mudam com o tempo; se a busca vier vazia, ajuste-os em
+> Os seletores dos sites mudam com o tempo; se a busca real vier vazia, ajuste-os em
 > `src/connectors/sites.ts` (a lógica testável não muda).
 
 ## Testes

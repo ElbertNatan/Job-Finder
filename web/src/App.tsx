@@ -5,6 +5,7 @@ import { detectGaps } from "../../src/profile/gaps.js";
 import { tailorResume } from "../../src/tailor/ats.js";
 import { applyResumeEdits, type ResumeEdits } from "../../src/tailor/edits.js";
 import { renderResumeHtml } from "../../src/render/html.js";
+import type { VagaRankeada } from "../../src/discovery/rank.js";
 import { extractPdfText } from "./pdf.js";
 import exemploMd from "../../examples/exemplo-dados.md?raw";
 import exemploVaga from "../../examples/vaga-exemplo.txt?raw";
@@ -12,8 +13,18 @@ import exemploVaga from "../../examples/vaga-exemplo.txt?raw";
 type Passo = 1 | 2 | 3;
 const PASSOS: { n: Passo; titulo: string; ajuda: string }[] = [
   { n: 1, titulo: "Currículo", ajuda: "De onde vêm os seus dados" },
-  { n: 2, titulo: "Vaga", ajuda: "Para qual vaga adaptar" },
+  { n: 2, titulo: "Buscar vaga", ajuda: "O agente pesquisa para você" },
   { n: 3, titulo: "Revisar & aplicar", ajuda: "Ajuste e finalize" },
+];
+
+const SITES: { v: string; nome: string }[] = [
+  { v: "exemplo", nome: "Exemplo (offline)" },
+  { v: "linkedin", nome: "LinkedIn" },
+  { v: "gupy", nome: "Gupy" },
+  { v: "vagas", nome: "Vagas.com" },
+  { v: "infojobs", nome: "InfoJobs" },
+  { v: "indeed", nome: "Indeed" },
+  { v: "catho", nome: "Catho" },
 ];
 
 export function App() {
@@ -22,12 +33,25 @@ export function App() {
   const [fonteDados, setFonteDados] = useState<string>("exemplo");
   const [editandoDados, setEditandoDados] = useState(false);
   const [pdfMsg, setPdfMsg] = useState<string>("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Passo 2 — busca de vagas (o agente pesquisa)
+  const perfilInicial = useMemo(() => ingestMarkdown(exemploMd), []);
+  const [site, setSite] = useState<string>("exemplo");
+  const [cargoBusca, setCargoBusca] = useState<string>(perfilInicial.objetivo.cargoAlvo ?? "");
+  const [localBusca, setLocalBusca] = useState<string>("Remoto");
+  const [vagas, setVagas] = useState<VagaRankeada[] | null>(null);
+  const [buscando, setBuscando] = useState(false);
+  const [erroBusca, setErroBusca] = useState<string>("");
+  const [modoManual, setModoManual] = useState(false);
+
+  // Passo 3
   const [jobText, setJobText] = useState<string>(exemploVaga);
+  const [vagaEscolhida, setVagaEscolhida] = useState<string>("");
   const [resumo, setResumo] = useState<string | null>(null);
   const [ocultarExp, setOcultarExp] = useState<Set<number>>(new Set());
   const [ocultarComp, setOcultarComp] = useState<Set<string>>(new Set());
   const [aprovado, setAprovado] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const { html, score, ajustes, experiencias, tecnicas, gaps } = useMemo(() => {
     const profile = ingestMarkdown(md);
@@ -69,6 +93,44 @@ export function App() {
     }
   }
 
+  async function buscarVagas() {
+    setBuscando(true);
+    setErroBusca("");
+    setVagas(null);
+    try {
+      const resp = await fetch("/api/buscar", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ site, cargo: cargoBusca, localidade: localBusca, profileMd: md }),
+      });
+      if (!resp.ok) throw new Error(String(resp.status));
+      const data = (await resp.json()) as { vagas: VagaRankeada[] };
+      setVagas(data.vagas);
+    } catch {
+      setErroBusca(
+        "Não consegui buscar agora. Inicie o servidor (JobFinder.bat ou `npm run serve`) — ou cole a descrição manualmente.",
+      );
+    } finally {
+      setBuscando(false);
+    }
+  }
+
+  async function escolherVaga(r: VagaRankeada) {
+    setVagaEscolhida(`${r.vaga.titulo} — ${r.vaga.empresa}`);
+    try {
+      const resp = await fetch("/api/detalhar", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ site, link: r.vaga.link }),
+      });
+      const data = (await resp.json()) as { descricao: string };
+      setJobText(data.descricao || `${r.vaga.titulo}. ${r.vaga.snippet}`);
+    } catch {
+      setJobText(`${r.vaga.titulo}. ${r.vaga.snippet}`);
+    }
+    setPasso(3);
+  }
+
   function baixarHtml() {
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
@@ -80,6 +142,7 @@ export function App() {
   }
 
   const nivel = score >= 75 ? "alto" : score >= 50 ? "medio" : "baixo";
+  const candLabel = (n: number | null | undefined) => (n != null ? `${n} candidatos` : "candidatos: —");
 
   return (
     <div className="shell">
@@ -119,7 +182,7 @@ export function App() {
           <section className="panel">
             <header className="panel-head">
               <h1>Comece pelo seu currículo</h1>
-              <p>Envie um PDF, cole seus dados ou use o exemplo. Depois é só apontar a vaga.</p>
+              <p>Envie um PDF, cole seus dados ou use o exemplo. Depois o agente busca as vagas para você.</p>
             </header>
 
             <div className="fontes">
@@ -152,13 +215,7 @@ export function App() {
                 <strong>Usar exemplo</strong>
                 <small>Ver como funciona</small>
               </button>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="application/pdf"
-                hidden
-                onChange={(e) => onPdf(e.target.files?.[0])}
-              />
+              <input ref={fileRef} type="file" accept="application/pdf" hidden onChange={(e) => onPdf(e.target.files?.[0])} />
             </div>
             {pdfMsg && <p className="aviso">{pdfMsg}</p>}
 
@@ -185,7 +242,7 @@ export function App() {
             <div className="nav">
               <span />
               <button className="btn primario" onClick={() => setPasso(2)}>
-                Continuar para a vaga
+                Buscar vagas
               </button>
             </div>
           </section>
@@ -194,25 +251,91 @@ export function App() {
         {passo === 2 && (
           <section className="panel">
             <header className="panel-head">
-              <h1>Cole a descrição da vaga</h1>
-              <p>Copie o texto do anúncio. Vamos comparar com o seu perfil e destacar o que casa.</p>
+              <h1>O agente busca as vagas</h1>
+              <p>Diga onde e o cargo. Ele pesquisa, ignora a BairesDev e, no LinkedIn, prioriza vagas com menos de 100 candidatos.</p>
             </header>
-            <textarea
-              className="vaga"
-              value={jobText}
-              onChange={(e) => setJobText(e.target.value)}
-              rows={16}
-              placeholder="Cole aqui os requisitos e responsabilidades da vaga…"
-              spellCheck={false}
-            />
-            <div className="nav">
-              <button className="btn" onClick={() => setPasso(1)}>
-                Voltar
-              </button>
-              <button className="btn primario" onClick={() => setPasso(3)}>
-                Revisar currículo adaptado
+
+            <div className="busca-form">
+              <label className="campo-inline">
+                <span>Site</span>
+                <select value={site} onChange={(e) => setSite(e.target.value)}>
+                  {SITES.map((s) => (
+                    <option key={s.v} value={s.v}>
+                      {s.nome}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="campo-inline cresce">
+                <span>Cargo</span>
+                <input type="text" value={cargoBusca} onChange={(e) => setCargoBusca(e.target.value)} placeholder="ex.: Engenheiro Backend" />
+              </label>
+              <label className="campo-inline">
+                <span>Local</span>
+                <input type="text" value={localBusca} onChange={(e) => setLocalBusca(e.target.value)} placeholder="Remoto, SP…" />
+              </label>
+              <button className="btn primario" onClick={buscarVagas} disabled={buscando}>
+                {buscando ? "Buscando…" : "Buscar"}
               </button>
             </div>
+
+            {erroBusca && <p className="aviso erro">{erroBusca}</p>}
+
+            {vagas && vagas.length === 0 && <p className="aviso">Nenhuma vaga encontrada. Tente outro cargo ou site.</p>}
+
+            {vagas && vagas.length > 0 && (
+              <ul className="vagas">
+                {vagas.map((r) => (
+                  <li key={r.vaga.link} className="vaga-item">
+                    <div className={`vaga-score n-${r.score >= 75 ? "alto" : r.score >= 50 ? "medio" : "baixo"}`}>{r.score}%</div>
+                    <div className="vaga-info">
+                      <strong>{r.vaga.titulo}</strong>
+                      <span className="vaga-meta">
+                        {r.vaga.empresa} · {r.vaga.local} · {candLabel(r.vaga.candidatos)}
+                      </span>
+                      <span className="vaga-match">
+                        {r.matched.length ? `bate: ${r.matched.join(", ")}` : "sem palavras-chave em comum"}
+                      </span>
+                    </div>
+                    <button className="btn primario" onClick={() => escolherVaga(r)}>
+                      Adaptar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <button className="link-editar" onClick={() => setModoManual((v) => !v)}>
+              {modoManual ? "Ocultar" : "Preferir colar a descrição manualmente?"}
+            </button>
+            {modoManual && (
+              <>
+                <textarea
+                  className="vaga"
+                  value={jobText}
+                  onChange={(e) => setJobText(e.target.value)}
+                  rows={8}
+                  placeholder="Cole aqui a descrição da vaga…"
+                  spellCheck={false}
+                />
+                <div className="nav">
+                  <button className="btn" onClick={() => setPasso(1)}>
+                    Voltar
+                  </button>
+                  <button className="btn primario" onClick={() => setPasso(3)}>
+                    Revisar com esta descrição
+                  </button>
+                </div>
+              </>
+            )}
+            {!modoManual && (
+              <div className="nav">
+                <button className="btn" onClick={() => setPasso(1)}>
+                  Voltar
+                </button>
+                <span />
+              </div>
+            )}
           </section>
         )}
 
@@ -221,7 +344,10 @@ export function App() {
             <div className="controles">
               <header className="panel-head">
                 <h1>Revisar &amp; aplicar</h1>
-                <p>Ajuste o que aparece. O preview à direita é exatamente o que será enviado.</p>
+                <p>
+                  {vagaEscolhida ? `Adaptado para: ${vagaEscolhida}. ` : ""}
+                  O preview à direita é exatamente o que será enviado.
+                </p>
               </header>
 
               <div className="score-card">
