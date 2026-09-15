@@ -377,7 +377,14 @@ export function App() {
               </div>
             )}
 
-            {vagas && vagas.length === 0 && <p className="aviso">Nenhuma vaga encontrada. Tente outro cargo ou site.</p>}
+            {vagas && vagas.length === 0 && (
+              <p className="aviso">
+                Nenhuma vaga capturada
+                {site !== "exemplo"
+                  ? `. Se elas aparecem na janela do ${nomeSite} mas não aqui, os seletores do site podem ter mudado (ajuste em src/connectors/sites.ts). Tente rolar a página aberta e buscar de novo.`
+                  : ". Tente outro cargo."}
+              </p>
+            )}
 
             {vagas && vagas.length > 0 && (
               <ul className="vagas">

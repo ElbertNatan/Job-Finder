@@ -17,6 +17,19 @@ export interface PlaywrightSiteDriverOptions {
   headless?: boolean;
 }
 
+/** Remove vagas repetidas pelo link (a mesma vaga aparece varias vezes na pagina). */
+function dedup(cards: RawCard[]): RawCard[] {
+  const vistos = new Set<string>();
+  const out: RawCard[] = [];
+  for (const c of cards) {
+    if (!vistos.has(c.link)) {
+      vistos.add(c.link);
+      out.push(c);
+    }
+  }
+  return out;
+}
+
 export class PlaywrightSiteDriver implements SiteDriver {
   private ctx: BrowserContext | null = null;
 
@@ -68,13 +81,28 @@ export class PlaywrightSiteDriver implements SiteDriver {
     await page.goto(this.config.loginUrl ?? this.config.homeUrl ?? "about:blank", { waitUntil: "domcontentloaded" });
   }
 
+  private async autoScroll(): Promise<void> {
+    const page = await this.page();
+    // A maioria dos sites (LinkedIn incluso) carrega a lista conforme rola (lazy).
+    for (let i = 0; i < 8; i++) {
+      await page.evaluate(() => window.scrollBy(0, 1600)).catch(() => {});
+      await page.mouse.wheel(0, 1600).catch(() => {});
+      await page.waitForTimeout(500);
+    }
+    await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+  }
+
   async buscarCards(criterios: Criterios): Promise<RawCard[]> {
     const page = await this.page();
     await page.goto(this.config.searchUrl(criterios), { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(2500);
     const s = this.config.seletores;
-    try {
-      return await page.$$eval(
+    // Espera aparecer algo (card ou link de vaga) antes de raspar; rola para carregar a lista.
+    await page.waitForSelector(`${s.card}, ${s.link}`, { timeout: 15000 }).catch(() => {});
+    await this.autoScroll();
+
+    // Estrategia 1: cards estruturados pelos seletores da config.
+    const porCards = await page
+      .$$eval(
         s.card,
         (nodes, sel) => {
           const txt = (el: Element | null) => (el?.textContent ?? "").trim();
@@ -82,20 +110,50 @@ export class PlaywrightSiteDriver implements SiteDriver {
             .map((n) => {
               const linkEl = n.querySelector(sel.link) as HTMLAnchorElement | null;
               return {
-                titulo: txt(n.querySelector(sel.titulo)),
+                titulo: txt(n.querySelector(sel.titulo)) || (linkEl?.getAttribute("aria-label") ?? "").trim(),
                 empresa: txt(n.querySelector(sel.empresa)),
                 local: txt(n.querySelector(sel.local)),
                 link: linkEl?.href ?? "",
                 candidatosTexto: sel.candidatos ? txt(n.querySelector(sel.candidatos)) : "",
               };
             })
-            .filter((c) => c.titulo.length > 0);
+            .filter((c) => c.titulo.length > 0 && c.link.length > 0);
         },
         s,
-      );
-    } catch {
-      return [];
-    }
+      )
+      .catch(() => [] as RawCard[]);
+
+    if (porCards.length) return dedup(porCards);
+
+    // Estrategia 2 (fallback robusto): extrai pelas ancoras de vaga + heuristica de vizinhanca.
+    const porLinks = await page
+      .$$eval(
+        s.link,
+        (anchors) => {
+          const txt = (el: Element | null | undefined) => (el?.textContent ?? "").trim();
+          const perto = (base: Element, pistas: string[]) => {
+            const card = base.closest("li, article, [data-job-id], [class*='card'], [class*='result']") ?? base.parentElement;
+            for (const p of pistas) {
+              const el = card?.querySelector(`[class*='${p}']`);
+              const t = txt(el);
+              if (t) return t;
+            }
+            return "";
+          };
+          return (anchors as HTMLAnchorElement[])
+            .map((a) => ({
+              titulo: (a.getAttribute("aria-label") || a.textContent || "").trim(),
+              empresa: perto(a, ["subtitle", "company", "empresa", "employer"]),
+              local: perto(a, ["caption", "location", "local", "metadata"]),
+              link: a.href,
+              candidatosTexto: perto(a, ["applicant", "candidat", "tvm"]),
+            }))
+            .filter((c) => c.titulo.length > 0 && c.link.length > 0);
+        },
+      )
+      .catch(() => [] as RawCard[]);
+
+    return dedup(porLinks);
   }
 
   async detalhe(link: string): Promise<{ descricao: string }> {
