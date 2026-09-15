@@ -5,33 +5,39 @@ import { App } from "../../web/src/App.js";
 
 afterEach(cleanup);
 
-describe("App (preview & revisão)", () => {
-  it("mounts and renders the ATS score and the preview iframe", () => {
+function irParaRevisar() {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /Revisar & aplicar/ }));
+}
+
+describe("App (fluxo em passos)", () => {
+  it("starts on step 1 asking to start with the resume", () => {
     render(<App />);
-    // score em % aparece (o exemplo casa com a vaga de exemplo)
-    expect(screen.getByText(/%$/)).toBeTruthy();
+    expect(screen.getByText("Comece pelo seu currículo")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Enviar PDF/ })).toBeTruthy();
+  });
+
+  it("on the review step, shows the ATS adherence and the preview with the candidate name", () => {
+    irParaRevisar();
+    expect(document.body.textContent).toContain("de aderência");
     const iframe = document.querySelector("iframe");
-    expect(iframe).toBeTruthy();
-    // o preview (srcDoc) contem o nome do candidato de exemplo
     expect(iframe!.getAttribute("srcdoc")).toContain("Maria Silva");
   });
 
   it("approving the preview shows the confirmation message", () => {
-    render(<App />);
-    fireEvent.click(screen.getByText("Aprovar preview"));
-    expect(screen.getByText(/Preview aprovado/)).toBeTruthy();
+    irParaRevisar();
+    fireEvent.click(screen.getByRole("button", { name: "Aprovar preview" }));
+    expect(screen.getByText(/Aprovado/)).toBeTruthy();
   });
 
   it("hiding a technical skill removes it from the competencias section of the resume", () => {
     const count = (hay: string, needle: string) => hay.split(needle).length - 1;
-    render(<App />);
+    irParaRevisar();
     const before = document.querySelector("iframe")!.getAttribute("srcdoc")!;
     const antes = count(before, "Node.js");
     expect(antes).toBeGreaterThan(0);
-    // clica no chip da competencia para oculta-la
-    fireEvent.click(screen.getByRole("button", { name: "Node.js" }));
+    fireEvent.click(screen.getByRole("button", { name: "Node.js", hidden: true }));
     const after = document.querySelector("iframe")!.getAttribute("srcdoc")!;
-    // some da linha de competencias -> ao menos uma ocorrencia a menos
     expect(count(after, "Node.js")).toBeLessThan(antes);
   });
 });
