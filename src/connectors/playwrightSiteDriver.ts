@@ -26,18 +26,46 @@ export class PlaywrightSiteDriver implements SiteDriver {
   ) {}
 
   private async page() {
-    if (!this.ctx) {
-      this.ctx = await chromium.launchPersistentContext(this.opts.userDataDir, {
-        headless: this.opts.headless ?? false,
-        viewport: { width: 1280, height: 900 },
-      });
+    // Resiliente: se o contexto foi fechado (usuario fechou a janela, etc.), relanca.
+    for (let tentativa = 0; tentativa < 2; tentativa++) {
+      try {
+        if (!this.ctx) {
+          this.ctx = await chromium.launchPersistentContext(this.opts.userDataDir, {
+            headless: this.opts.headless ?? false,
+            viewport: { width: 1280, height: 900 },
+          });
+        }
+        return this.ctx.pages()[0] ?? (await this.ctx.newPage());
+      } catch (e) {
+        this.ctx = null;
+        if (tentativa === 1) throw e;
+      }
     }
-    return this.ctx.pages()[0] ?? (await this.ctx.newPage());
+    throw new Error("nao foi possivel abrir o navegador");
   }
 
   async close(): Promise<void> {
-    await this.ctx?.close();
+    try {
+      await this.ctx?.close();
+    } catch {
+      /* ja fechado */
+    }
     this.ctx = null;
+  }
+
+  /** True se, ao abrir a home, o site NAO redirecionou para login/authwall. */
+  async estaLogado(): Promise<boolean> {
+    if (!this.config.requerLogin) return true;
+    const page = await this.page();
+    await page.goto(this.config.homeUrl ?? this.config.loginUrl ?? "about:blank", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1500);
+    return !/\/login|authwall|signup|uas\/login|checkpoint/i.test(page.url());
+  }
+
+  /** Abre o navegador na tela de login e deixa a janela para o usuario entrar. */
+  async abrirParaLogin(): Promise<void> {
+    const page = await this.page();
+    await page.goto(this.config.loginUrl ?? this.config.homeUrl ?? "about:blank", { waitUntil: "domcontentloaded" });
   }
 
   async buscarCards(criterios: Criterios): Promise<RawCard[]> {

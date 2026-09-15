@@ -27,6 +27,10 @@ export interface SiteConfig {
   priorizarPoucosCandidatos?: boolean;
   /** Precisa de login (contexto persistente) para funcionar. */
   requerLogin?: boolean;
+  /** Pagina inicial (logada) — usada para detectar se o usuario ja esta logado. */
+  homeUrl?: string;
+  /** Pagina de login, aberta quando pedimos ao usuario para entrar. */
+  loginUrl?: string;
 }
 
 const enc = encodeURIComponent;
@@ -37,6 +41,8 @@ export const SITES: Record<string, SiteConfig> = {
     site: "LinkedIn",
     priorizarPoucosCandidatos: true,
     requerLogin: true,
+    homeUrl: "https://www.linkedin.com/feed/",
+    loginUrl: "https://www.linkedin.com/login",
     searchUrl: (c) =>
       `https://www.linkedin.com/jobs/search/?keywords=${enc(c.cargo)}` +
       (c.localidade ? `&location=${enc(c.localidade)}` : "") +

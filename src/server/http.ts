@@ -42,12 +42,16 @@ export function criarServidor({ service, fallbackProfile, distDir }: ServidorOpt
     const body = await lerBody(req);
     const profile = typeof body.profileMd === "string" && body.profileMd ? ingestMarkdown(body.profileMd) : fallbackProfile;
     if (req.url === "/api/buscar") {
-      const vagas = await service.buscar(profile, {
+      const r = await service.buscar(profile, {
         site: String(body.site ?? "exemplo"),
         cargo: String(body.cargo ?? ""),
         localidade: body.localidade ? String(body.localidade) : undefined,
       });
-      return enviarJson(res, { vagas });
+      return enviarJson(res, { vagas: r.vagas, precisaLogin: r.precisaLogin });
+    }
+    if (req.url === "/api/login") {
+      await service.login(String(body.site ?? "exemplo"));
+      return enviarJson(res, { ok: true });
     }
     if (req.url === "/api/detalhar") {
       const r = await service.detalhar({ site: String(body.site ?? "exemplo"), link: String(body.link ?? "") });

@@ -47,6 +47,8 @@ export function App() {
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [detalhes, setDetalhes] = useState<Record<string, string>>({});
   const [carregandoDet, setCarregandoDet] = useState<Set<string>>(new Set());
+  const [precisaLogin, setPrecisaLogin] = useState(false);
+  const [abrindoLogin, setAbrindoLogin] = useState(false);
 
   // Passo 3
   const [jobText, setJobText] = useState<string>(exemploVaga);
@@ -103,6 +105,7 @@ export function App() {
   async function buscarVagas() {
     setBuscando(true);
     setErroBusca("");
+    setPrecisaLogin(false);
     setVagas(null);
     try {
       const resp = await fetch("/api/buscar", {
@@ -110,13 +113,16 @@ export function App() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ site, cargo: cargoEfetivo, localidade: localBusca, profileMd: md }),
       });
-      const data = (await resp.json().catch(() => ({}))) as { vagas?: VagaRankeada[]; erro?: string };
+      const data = (await resp.json().catch(() => ({}))) as { vagas?: VagaRankeada[]; precisaLogin?: boolean; erro?: string };
       if (!resp.ok) {
         setErroBusca(
           `A busca em ${nomeSite} falhou: ${data.erro ?? resp.status}. ` +
-            `Sites reais exigem login (abre o navegador) e o Chromium do Playwright. ` +
-            `Para testar sem isso, use "Exemplo (offline)".`,
+            `Se persistir, verifique o Chromium do Playwright ou use "Exemplo (offline)".`,
         );
+        return;
+      }
+      if (data.precisaLogin) {
+        setPrecisaLogin(true);
         return;
       }
       setVagas(data.vagas ?? []);
@@ -134,6 +140,21 @@ export function App() {
     if (passo === 2 && site === "exemplo" && vagas === null && !buscando) void buscarVagas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [passo, site]);
+
+  async function abrirLogin() {
+    setAbrindoLogin(true);
+    try {
+      await fetch("/api/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ site }),
+      });
+    } catch {
+      /* a janela do navegador abre pelo servidor; erro aqui nao impede o login */
+    } finally {
+      setAbrindoLogin(false);
+    }
+  }
 
   async function verRequisitos(r: VagaRankeada) {
     const link = r.vaga.link;
@@ -305,7 +326,15 @@ export function App() {
             <div className="busca-form">
               <label className="campo-inline">
                 <span>Site</span>
-                <select value={site} onChange={(e) => setSite(e.target.value)}>
+                <select
+                  value={site}
+                  onChange={(e) => {
+                    setSite(e.target.value);
+                    setVagas(null);
+                    setPrecisaLogin(false);
+                    setErroBusca("");
+                  }}
+                >
                   {SITES.map((s) => (
                     <option key={s.v} value={s.v}>
                       {s.nome}
@@ -332,6 +361,21 @@ export function App() {
             </div>
 
             {erroBusca && <p className="aviso erro">{erroBusca}</p>}
+
+            {precisaLogin && (
+              <div className="login-box">
+                <strong>Faça login no {nomeSite} para o agente buscar</strong>
+                <p>Vai abrir uma janela do navegador. Entre na sua conta e depois volte aqui e clique em “Já entrei”.</p>
+                <div className="nav-final">
+                  <button className="btn" onClick={abrirLogin} disabled={abrindoLogin}>
+                    {abrindoLogin ? "Abrindo janela…" : `Abrir login do ${nomeSite}`}
+                  </button>
+                  <button className="btn primario" onClick={buscarVagas}>
+                    Já entrei — buscar
+                  </button>
+                </div>
+              </div>
+            )}
 
             {vagas && vagas.length === 0 && <p className="aviso">Nenhuma vaga encontrada. Tente outro cargo ou site.</p>}
 

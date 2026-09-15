@@ -56,6 +56,9 @@ export class GerenciadorConectores {
     const conn = criarConector(site, { headless: this.opts.headless });
     return {
       priorizarPoucosCandidatos: conn.options.priorizarPoucosCandidatos ?? false,
+      requerLogin: conn.requerLogin,
+      estaLogado: () => conn.estaLogado(),
+      abrirParaLogin: () => conn.abrirParaLogin(),
       buscar: (c) => conn.buscar(c),
       detalhar: (v) => conn.detalhar(v),
       fechar: () => conn.fechar(),

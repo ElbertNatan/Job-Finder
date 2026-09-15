@@ -13,5 +13,8 @@ export function criarConector(
   const cfg = siteConfig(siteKey);
   const userDataDir = opts.userDataDir ?? `.browser-session/${siteKey.toLowerCase()}`;
   const driver = new PlaywrightSiteDriver(cfg, { userDataDir, headless: opts.headless });
-  return new BrowserConnector(cfg.site, driver, { priorizarPoucosCandidatos: cfg.priorizarPoucosCandidatos });
+  return new BrowserConnector(cfg.site, driver, {
+    priorizarPoucosCandidatos: cfg.priorizarPoucosCandidatos,
+    requerLogin: cfg.requerLogin,
+  });
 }

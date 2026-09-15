@@ -96,6 +96,10 @@ button { font-family: inherit; cursor: pointer; }
 
 .aviso.erro { background: #fff0f0; border-color: #ffd1d1; color: #a12222; }
 
+.login-box { margin: 22px 0 0; padding: 18px; border: 1px solid #d5deff; background: #f2f5ff; border-radius: 10px; }
+.login-box strong { display: block; font-size: 15px; }
+.login-box p { margin: 6px 0 12px; color: var(--ink-2); font-size: 13.5px; }
+
 .vagas { list-style: none; margin: 22px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .vaga-item { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .vaga-item:hover { border-color: #c3cbe0; }

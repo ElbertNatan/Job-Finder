@@ -24,12 +24,18 @@ export interface SiteDriver {
   detalhe(link: string): Promise<{ descricao: string }>;
   extrairCampos?(link: string): Promise<CampoFormulario[]>;
   preencherAteRevisao?(link: string, respostas: Record<string, string>): Promise<void>;
+  /** Diz se o usuario ja esta logado no site (sites que exigem login). */
+  estaLogado?(): Promise<boolean>;
+  /** Abre o navegador na tela de login para o usuario entrar. */
+  abrirParaLogin?(): Promise<void>;
   close?(): Promise<void>;
 }
 
 export interface BrowserConnectorOptions {
   /** Prioriza vagas com poucos candidatos (regra do LinkedIn). Informa o consumidor do rank. */
   priorizarPoucosCandidatos?: boolean;
+  /** Site exige login para buscar (ex.: LinkedIn). */
+  requerLogin?: boolean;
 }
 
 /**
@@ -98,6 +104,20 @@ export class BrowserConnector implements JobConnector {
 
   private gate(mensagem: string): ApplyResult {
     return { status: "aguardando_aprovacao", precisaHumano: true, mensagem };
+  }
+
+  get requerLogin(): boolean {
+    return this.options.requerLogin ?? false;
+  }
+
+  /** Se o site exige login, diz se o usuario ja esta logado (default: true quando nao aplicavel). */
+  async estaLogado(): Promise<boolean> {
+    return this.driver.estaLogado ? this.driver.estaLogado() : true;
+  }
+
+  /** Abre o navegador na tela de login do site. */
+  async abrirParaLogin(): Promise<void> {
+    await this.driver.abrirParaLogin?.();
   }
 
   /** Libera o navegador do driver (se houver). */
